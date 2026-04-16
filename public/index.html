@@ -132,10 +132,16 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 /* =====================================================================
-   MESSENGER PRO — Lógica completa
+   MESSENGER PRO — P2P Descentralizado
    ===================================================================== */
 
-const socket = io();
+// Conexión automática al servidor local
+const socket = io(window.location.origin, { 
+  reconnection: true, 
+  reconnectionDelay: 1000, 
+  reconnectionDelayMax: 5000,
+  reconnectionAttempts: Infinity 
+});
 
 let username;
 let currentTarget = null;
@@ -145,6 +151,8 @@ let localStream, pc;
 let micOn = true, camOn = true;
 let keyPair;
 let sharedKeys = {};
+let connectedNodes = []; // Lista de nodos P2P disponibles
+let primaryNode = null; // Nodo principal actual
 
 /* ── ICE / STUN / TURN ─────────────────────────────────────────────── */
 const RTC_CONFIG = {
@@ -186,6 +194,8 @@ function join() {
   if (!v) { document.getElementById('username').focus(); return; }
   username = v;
   socket.emit("join", username);
+  // Notificar que este cliente está activo en la red P2P
+  socket.emit("node-join", { username: v, timestamp: Date.now() });
   const btn = document.getElementById('btnJoin');
   btn.textContent = '✓ ' + username;
   btn.classList.add('joined');
@@ -232,6 +242,22 @@ let allUsers = {};
 socket.on("user-list", (users) => {
   allUsers = users;
   renderUsers(users);
+});
+
+// P2P: Recibir lista de nodos disponibles
+socket.on("node-list", (nodeList) => {
+  connectedNodes = nodeList.nodes || [];
+  console.log("📡 Nodos disponibles:", connectedNodes.length);
+});
+
+// P2P: Cuando se conecta/desconecta
+socket.on("connect", () => {
+  console.log("✅ Conectado al servidor P2P local");
+  primaryNode = socket.id;
+});
+
+socket.on("disconnect", () => {
+  console.warn("⚠️ Desconectado del servidor, intentando reconectar...");
 });
 
 function renderUsers(users) {
